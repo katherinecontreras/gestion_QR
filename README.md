@@ -10,7 +10,7 @@ Sistema de trazabilidad para obras civiles/industriales: **carga masiva (Excel)*
   - `/escanner`
   - `/detalle/:id`
 - **Gestión (Admin, Calidad)**
-  - `/dashboard`
+  - `/trazabilidad`
   - `/carga-datos`
   - `/generar-qr`
 - **Admin (solo Admin)**

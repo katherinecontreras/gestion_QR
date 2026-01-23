@@ -32,12 +32,12 @@ export function AppLayout({ children }) {
       <header className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
           <Link to="/escanner" className="font-semibold tracking-tight">
-            Gestión de QRs
+            <img src="/src/assets/image.ico" alt="Logo" className="w-16 h-16" />
           </Link>
 
           <nav className="ml-2 flex items-center gap-1">
             <NavItem to="/escanner">Escáner</NavItem>
-            {showGestion && <NavItem to="/dashboard">Dashboard</NavItem>}
+            {showGestion && <NavItem to="/trazabilidad">Trazabilidad</NavItem>}
             {showGestion && <NavItem to="/carga-datos">Carga Excel</NavItem>}
             {showGestion && <NavItem to="/generar-qr">Generar QR</NavItem>}
           </nav>
