@@ -66,12 +66,62 @@ export async function upsertFromExcel({ tipo, rows }) {
   if (!Array.isArray(rows) || rows.length === 0) return { inserted: 0 }
 
   if (tipo === TIPOS.HORMIGONES) {
-    const payload = rows.map((r) => ({
-      titulo: r.titulo ?? r.TITULO ?? r.Titulo ?? '',
-      nro_interno: String(r.nro_interno ?? r.NRO_INTERNO ?? r.Nro_Interno ?? r['nro interno'] ?? r['Nro Interno'] ?? '').trim(),
-      peso_total_base_kg: r.peso_total_base_kg ?? r.PESO_TOTAL_BASE_KG ?? r.Peso_Total_Base_Kg ?? null,
-      satelite: r.satelite ?? r.SATELITE ?? r.Satelite ?? null,
-    })).filter((r) => r.titulo && r.nro_interno)
+    function normalizeStr(v) {
+      const s = String(v ?? '').trim()
+      return s ? s : null
+    }
+
+    function normalizeNroInterno(r) {
+      return normalizeStr(
+        r.nro_interno ??
+          r.NRO_INTERNO ??
+          r.Nro_Interno ??
+          r['nro interno'] ??
+          r['Nro Interno'],
+      )
+    }
+
+    function normalizePeso(v) {
+      if (v == null || v === '') return null
+      if (typeof v === 'number' && Number.isFinite(v)) return v
+      const s = String(v).trim()
+      if (!s) return null
+      const n = Number.parseFloat(s.replace(',', '.'))
+      return Number.isFinite(n) ? n : null
+    }
+
+    // Deduplicamos por nro_interno (si el Excel trae repetidos)
+    const byNro = new Map()
+    for (const r of rows) {
+      const nro = normalizeNroInterno(r)
+      if (!nro) continue
+
+      const titulo = normalizeStr(r.titulo ?? r.TITULO ?? r.Titulo)
+      const satelite = normalizeStr(r.satelite ?? r.SATELITE ?? r.Satelite)
+      const peso = normalizePeso(
+        r.peso_total_base_kg ?? r.PESO_TOTAL_BASE_KG ?? r.Peso_Total_Base_Kg,
+      )
+
+      const item = { nro_interno: nro }
+      // Importante: si no viene un campo, NO lo mandamos para no pisar con null/vacío.
+      if (titulo != null) item.titulo = titulo
+      if (satelite != null) item.satelite = satelite
+      if (peso != null) item.peso_total_base_kg = peso
+
+      byNro.set(nro, item)
+    }
+
+    const payload = Array.from(byNro.values())
+    if (payload.length === 0) return { inserted: 0, updated: 0 }
+
+    // Calculamos cuántos ya existían (para feedback al usuario)
+    const nroList = payload.map((p) => p.nro_interno).filter(Boolean)
+    const { data: existing, error: eExisting } = await supabase
+      .from(TIPOS.HORMIGONES)
+      .select('nro_interno')
+      .in('nro_interno', nroList)
+    if (eExisting) throw eExisting
+    const existingCount = existing?.length ?? 0
 
     const { data, error } = await supabase
       .from(TIPOS.HORMIGONES)
@@ -79,7 +129,10 @@ export async function upsertFromExcel({ tipo, rows }) {
       .select('id_hormigon')
 
     if (error) throw error
-    return { inserted: data?.length ?? 0 }
+    const total = data?.length ?? payload.length
+    const updated = existingCount
+    const inserted = Math.max(0, total - existingCount)
+    return { inserted, updated, total }
   }
 
   const payload = rows
@@ -90,12 +143,25 @@ export async function upsertFromExcel({ tipo, rows }) {
     }))
     .filter((r) => r.nro_linea && r.nro_iso)
 
+  if (payload.length === 0) return { inserted: 0, updated: 0 }
+
+  const nroIsoList = payload.map((p) => p.nro_iso).filter(Boolean)
+  const { data: existing, error: eExisting } = await supabase
+    .from(TIPOS.CANERIAS)
+    .select('nro_iso')
+    .in('nro_iso', nroIsoList)
+  if (eExisting) throw eExisting
+  const existingCount = existing?.length ?? 0
+
   const { data, error } = await supabase
     .from(TIPOS.CANERIAS)
     .upsert(payload, { onConflict: 'nro_iso' })
     .select('id_caneria')
 
   if (error) throw error
-  return { inserted: data?.length ?? 0 }
+  const total = data?.length ?? payload.length
+  const updated = existingCount
+  const inserted = Math.max(0, total - existingCount)
+  return { inserted, updated, total }
 }
 

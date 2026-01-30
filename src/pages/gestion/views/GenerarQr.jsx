@@ -1,14 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { Card } from '../../components/Card.jsx'
-import { Input } from '../../components/Input.jsx'
+import { Card } from '../../../components/Card.jsx'
+import { Input } from '../../../components/Input.jsx'
 import {
   buildQrPayload,
   saveQrPayload,
   searchCanerias,
   searchHormigones,
   TIPOS,
-} from '../../services/db/records.js'
+} from '../../../services/db/records.js'
 
 function downloadCanvas(canvas, filename) {
   const url = canvas.toDataURL('image/png')

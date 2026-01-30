@@ -28,7 +28,10 @@ export function AppLayout({ children }) {
   const showGestion = roleId === ROLE_IDS.CALIDAD
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-900">
+    <div className="min-h-dvh relative bg-slate-200 text-slate-900">
+      <div className="absolute bottom-10 w-20 h-20 shadow-md rounded-full right-10">
+        <NavItem to="/escanner"><img src="/src/assets/image.ico" alt="Logo" className="w-20 h-20" /></NavItem>
+      </div>
       <header className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
           <Link to="/escanner" className="font-semibold tracking-tight">
@@ -36,10 +39,7 @@ export function AppLayout({ children }) {
           </Link>
 
           <nav className="ml-2 flex items-center gap-1">
-            <NavItem to="/escanner">Escáner</NavItem>
             {showGestion && <NavItem to="/trazabilidad">Trazabilidad</NavItem>}
-            {showGestion && <NavItem to="/carga-datos">Carga Excel</NavItem>}
-            {showGestion && <NavItem to="/generar-qr">Generar QR</NavItem>}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">

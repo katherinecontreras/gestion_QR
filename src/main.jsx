@@ -10,9 +10,7 @@ import { LoginPage } from './pages/auth/Login.jsx'
 import { RegistroPage } from './pages/auth/Registro.jsx'
 import { EscannerPage } from './pages/obra/Escanner.jsx'
 import { DetallePage } from './pages/obra/Detalle.jsx'
-import { TrazabilidadPage } from './pages/gestion/Trazabilidad.jsx'
-import { CargaDatosPage } from './pages/gestion/CargaDatos.jsx'
-import { GenerarQrPage } from './pages/gestion/GenerarQr.jsx'
+import GestionPage from './pages/gestion/GestionPage.jsx'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -42,7 +40,7 @@ const router = createBrowserRouter([
         path: 'trazabilidad',
         element: (
           <ProtectedRoute allowedRoleIds={[2]}>
-            <TrazabilidadPage />
+            <GestionPage />
           </ProtectedRoute>
         ),
       },
@@ -50,7 +48,7 @@ const router = createBrowserRouter([
         path: 'carga-datos',
         element: (
           <ProtectedRoute allowedRoleIds={[2]}>
-            <CargaDatosPage />
+            <GestionPage />
           </ProtectedRoute>
         ),
       },
@@ -58,7 +56,7 @@ const router = createBrowserRouter([
         path: 'generar-qr',
         element: (
           <ProtectedRoute allowedRoleIds={[2]}>
-            <GenerarQrPage />
+            <GestionPage />
           </ProtectedRoute>
         ),
       },
