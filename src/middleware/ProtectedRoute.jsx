@@ -7,10 +7,10 @@ export function ProtectedRoute({
   redirectTo = '/escanner',
   children,
 }) {
-  const { loading, user, roleId } = useAuth()
+  const { loading, profileLoading, user, roleId } = useAuth()
   const location = useLocation()
 
-  if (loading) {
+  if (loading || (user && profileLoading)) {
     return (
       <div className="min-h-[50vh] grid place-items-center text-slate-600">
         Cargando…

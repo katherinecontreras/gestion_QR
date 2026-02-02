@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -36,8 +37,10 @@ export function AuthProvider({ children }) {
     async function loadProfile() {
       if (!session?.user?.id) {
         setProfile(null)
+        setProfileLoading(false)
         return
       }
+      setProfileLoading(true)
       try {
         const p = await fetchUserProfile(session.user.id)
         if (!mounted) return
@@ -45,6 +48,9 @@ export function AuthProvider({ children }) {
       } catch {
         if (!mounted) return
         setProfile(null)
+      } finally {
+        if (!mounted) return
+        setProfileLoading(false)
       }
     }
     loadProfile()
@@ -59,6 +65,7 @@ export function AuthProvider({ children }) {
     const roleName = profile?.roleName ?? null
     return {
       loading,
+      profileLoading,
       session,
       user,
       profile,
@@ -68,7 +75,7 @@ export function AuthProvider({ children }) {
         supabase.auth.signInWithPassword({ email, password }),
       signOut: async () => supabase.auth.signOut(),
     }
-  }, [loading, session, profile])
+  }, [loading, profileLoading, session, profile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
