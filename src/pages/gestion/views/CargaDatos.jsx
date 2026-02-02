@@ -80,6 +80,72 @@ function readHormigonesFixed(file) {
   })
 }
 
+function readCaneriasFixed(file) {
+  // Formato fijo:
+  // - desde fila 5 (1-indexed)
+  // - satelite: columna A
+  // - nro_linea: columna B
+  // - nro_iso: columna C (clave)
+  // - cantidad: se calcula sumando repetidos (mismo satelite+nro_linea+nro_iso)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    reader.onload = () => {
+      try {
+        const data = new Uint8Array(reader.result)
+        const wb = XLSX.read(data, { type: 'array' })
+        const sheetName = wb.SheetNames?.[0]
+        if (!sheetName) return resolve([])
+        const ws = wb.Sheets[sheetName]
+        const ref = ws['!ref']
+        if (!ref) return resolve([])
+        const range = XLSX.utils.decode_range(ref)
+
+        function cellValue(r0, c0) {
+          const addr = XLSX.utils.encode_cell({ r: r0, c: c0 })
+          const v = ws[addr]?.v ?? null
+          if (v == null) return null
+          if (typeof v === 'string') return v.trim()
+          return v
+        }
+
+        const byKey = new Map()
+        const startRow0 = 4 // fila 5 (1-indexed) => r=4 (0-indexed)
+        for (let r = startRow0; r <= range.e.r; r++) {
+          const satelite = cellValue(r, 0) // A
+          const nro_linea = cellValue(r, 1) // B
+          const nro_iso = cellValue(r, 2) // C
+
+          const iso = String(nro_iso ?? '').trim()
+          if (!iso) continue
+
+          const sat = satelite == null || satelite === '' ? null : String(satelite).trim()
+          const linea =
+            nro_linea == null || nro_linea === '' ? null : String(nro_linea).trim()
+
+          const key = `${iso}||${linea ?? ''}||${sat ?? ''}`
+          const prev = byKey.get(key)
+          if (prev) {
+            prev.cantidad += 1
+          } else {
+            byKey.set(key, {
+              nro_iso: iso,
+              nro_linea: linea,
+              satelite: sat,
+              cantidad: 1,
+            })
+          }
+        }
+
+        resolve(Array.from(byKey.values()))
+      } catch (e) {
+        reject(e)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  })
+}
+
 function isExcelFile(file) {
   if (!file) return false
   const name = String(file.name ?? '').toLowerCase()
@@ -96,7 +162,7 @@ export function CargaDatosModal({ open, onClose, initialTipo = TIPOS.HORMIGONES,
 
   const expected = useMemo(() => {
     if (tipo === TIPOS.CANERIAS) {
-      return ['nro_linea', 'nro_iso', 'satelite']
+      return ['Desde fila 5', 'A = satelite', 'B = nro_linea', 'C = nro_iso (clave)', 'cantidad = repeticiones']
     }
     return [
       'Desde fila 3',
@@ -119,7 +185,9 @@ export function CargaDatosModal({ open, onClose, initialTipo = TIPOS.HORMIGONES,
 
   async function parseSelectedFile() {
     if (!file) return []
-    return tipo === TIPOS.HORMIGONES ? await readHormigonesFixed(file) : await readExcelToJson(file)
+    if (tipo === TIPOS.HORMIGONES) return await readHormigonesFixed(file)
+    if (tipo === TIPOS.CANERIAS) return await readCaneriasFixed(file)
+    return await readExcelToJson(file)
   }
 
   async function onCargarDatos() {

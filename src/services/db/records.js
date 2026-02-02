@@ -6,7 +6,11 @@ export const TIPOS = {
 }
 
 export function buildQrPayload({ id, tipo }) {
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const fromEnv = import.meta?.env?.VITE_PUBLIC_APP_URL
+  const fallback = 'https://gestion-qr.vercel.app'
+  const runtime = typeof window !== 'undefined' ? window.location.origin : ''
+  const base = String(fromEnv || fallback || runtime || '').trim()
+  const origin = base.replace(/\/+$/, '')
   const t = tipo === TIPOS.CANERIAS ? TIPOS.CANERIAS : TIPOS.HORMIGONES
   return `${origin}/detalle/${id}?t=${encodeURIComponent(t)}`
 }
@@ -136,30 +140,83 @@ export async function upsertFromExcel({ tipo, rows }) {
   }
 
   const payload = rows
-    .map((r) => ({
-      satelite: r.satelite ?? r.SATELITE ?? r.Satelite ?? null,
-      nro_linea: String(r.nro_linea ?? r.NRO_LINEA ?? r.Nro_Linea ?? r['nro linea'] ?? r['Nro Línea'] ?? '').trim(),
-      nro_iso: String(r.nro_iso ?? r.NRO_ISO ?? r.Nro_Iso ?? r['nro iso'] ?? r['Nro Iso'] ?? '').trim(),
-    }))
-    .filter((r) => r.nro_linea && r.nro_iso)
+    .map((r) => {
+      const satelite = r.satelite ?? r.SATELITE ?? r.Satelite ?? null
+      const nro_linea_raw =
+        r.nro_linea ?? r.NRO_LINEA ?? r.Nro_Linea ?? r['nro linea'] ?? r['Nro Línea'] ?? null
+      const nro_iso_raw =
+        r.nro_iso ?? r.NRO_ISO ?? r.Nro_Iso ?? r['nro iso'] ?? r['Nro Iso'] ?? null
+      const cantidad_raw = r.cantidad ?? r.CANTIDAD ?? r.Cantidad ?? 1
+
+      const nro_linea = String(nro_linea_raw ?? '').trim()
+      const nro_iso = String(nro_iso_raw ?? '').trim()
+      const cantidad =
+        typeof cantidad_raw === 'number' && Number.isFinite(cantidad_raw)
+          ? Math.max(1, Math.trunc(cantidad_raw))
+          : Math.max(1, Math.trunc(Number.parseInt(String(cantidad_raw ?? '1'), 10) || 1))
+
+      return {
+        satelite: satelite == null || satelite === '' ? null : String(satelite).trim(),
+        nro_linea: nro_linea || null,
+        nro_iso,
+        cantidad,
+      }
+    })
+    .filter((r) => r.nro_iso)
 
   if (payload.length === 0) return { inserted: 0, updated: 0 }
 
-  const nroIsoList = payload.map((p) => p.nro_iso).filter(Boolean)
+  // Deduplicamos por clave compuesta: (nro_iso, nro_linea, satelite).
+  // Importante: si cambia el satélite, es OTRO dato.
+  const byKey = new Map()
+  for (const r of payload) {
+    const iso = String(r.nro_iso ?? '').trim()
+    const linea = r.nro_linea == null ? '' : String(r.nro_linea).trim()
+    const sat = r.satelite == null ? '' : String(r.satelite).trim()
+    if (!iso || !sat) continue
+
+    const key = `${iso}||${linea}||${sat}`
+    const prev = byKey.get(key)
+    if (prev) {
+      prev.cantidad += r.cantidad ?? 1
+    } else {
+      byKey.set(key, {
+        nro_iso: iso,
+        nro_linea: linea || null,
+        satelite: sat,
+        cantidad: r.cantidad ?? 1,
+      })
+    }
+  }
+
+  const mergedPayload = Array.from(byKey.values())
+  if (mergedPayload.length === 0) return { inserted: 0, updated: 0 }
+
+  const nroIsoList = Array.from(new Set(mergedPayload.map((p) => p.nro_iso).filter(Boolean)))
   const { data: existing, error: eExisting } = await supabase
     .from(TIPOS.CANERIAS)
-    .select('nro_iso')
+    .select('nro_iso,nro_linea,satelite')
     .in('nro_iso', nroIsoList)
   if (eExisting) throw eExisting
-  const existingCount = existing?.length ?? 0
+  const existingSet = new Set(
+    (existing ?? []).map((r) => `${r.nro_iso}||${String(r.nro_linea ?? '')}||${String(r.satelite ?? '')}`),
+  )
+  const existingCount = mergedPayload.reduce((acc, r) => {
+    const k = `${r.nro_iso}||${String(r.nro_linea ?? '')}||${String(r.satelite ?? '')}`
+    return acc + (existingSet.has(k) ? 1 : 0)
+  }, 0)
+  // Regla: `cantidad` representa repeticiones del Excel (no se acumula con lo ya cargado).
+  for (const r of mergedPayload) {
+    r.cantidad = Math.max(1, r.cantidad ?? 1)
+  }
 
   const { data, error } = await supabase
     .from(TIPOS.CANERIAS)
-    .upsert(payload, { onConflict: 'nro_iso' })
+    .upsert(mergedPayload, { onConflict: 'nro_iso,nro_linea,satelite' })
     .select('id_caneria')
 
   if (error) throw error
-  const total = data?.length ?? payload.length
+  const total = data?.length ?? mergedPayload.length
   const updated = existingCount
   const inserted = Math.max(0, total - existingCount)
   return { inserted, updated, total }

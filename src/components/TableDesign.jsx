@@ -38,6 +38,7 @@ export default function TableDesign({
             <>
               <Th>Nro línea</Th>
               <Th>Nro ISO</Th>
+              <Th>Cantidad</Th>
               <Th>Satélite</Th>
               <Th>Archivo</Th>
             </>
@@ -45,13 +46,16 @@ export default function TableDesign({
         </tr>
       </thead>
       <tbody className="divide-y">
-        {rows.map((r) => {
+        {rows.map((r, idx) => {
           const rowId =
             tipo === TIPOS.HORMIGONES ? r.id_hormigon : r.id_caneria
           const hasFile = Boolean(r.archivo_url)
           const isSelected = selectedRowId != null && selectedRowId === rowId
+          const key =
+            rowId ??
+            `${tipo}-${String(r.nro_iso ?? '')}-${String(r.nro_linea ?? '')}-${String(r.satelite ?? '')}-${idx}`
           return (
-            <tr key={rowId} className="align-top">
+            <tr key={key} className="align-top">
               {selectMode && (
                 <Td className="w-12">
                   <input
@@ -83,6 +87,7 @@ export default function TableDesign({
                 <>
                   <Td className="font-mono">{r.nro_linea}</Td>
                   <Td className="font-mono">{r.nro_iso}</Td>
+                  <Td className="font-mono">{r.cantidad ?? 1}</Td>
                   <Td>{r.satelite ?? '—'}</Td>
                   <Td>
                     <ArchivoCell

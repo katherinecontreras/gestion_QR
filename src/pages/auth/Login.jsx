@@ -8,6 +8,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, signInWithPassword } = useAuth()
+  const from = location.state?.from
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,8 +17,8 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (user) navigate('/escanner', { replace: true })
-  }, [user, navigate])
+    if (user) navigate(from ?? '/escanner', { replace: true })
+  }, [user, navigate, from])
 
   useEffect(() => {
     const prefill = location.state?.prefill
