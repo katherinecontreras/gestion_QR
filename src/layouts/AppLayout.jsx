@@ -30,7 +30,7 @@ export function AppLayout({ children }) {
 
   return (
     <div className="min-h-dvh relative bg-slate-200 text-slate-900">
-      <div className="absolute bottom-10 w-20 h-20 shadow-md rounded-full right-10">
+      <div className="fixed bottom-6 right-6 z-50 w-20 h-20 shadow-md rounded-full">
         <NavItem to="/escanner">
           <img src={logoUrl} alt="Logo" className="w-20 h-20" />
         </NavItem>
