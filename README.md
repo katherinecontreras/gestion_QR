@@ -1,20 +1,52 @@
 # Gestión de QRs (Calidad / Obra)
 
-Sistema de trazabilidad para obras civiles/industriales: **carga masiva (Excel)**, **vinculación de documentación (Storage)**, **generación/escaneo de QRs** y **control de acceso por roles** (Admin / Calidad / Obrero).
+Aplicación web para **trazabilidad en obra**: permite **cargar datos desde Excel**, **vincular documentación**, **generar QRs imprimibles** y **escanear QRs** para abrir una ficha con descarga de documentación.
+
+## Qué puede hacer
+
+- **Carga masiva desde Excel** (upsert en Supabase)
+  - Hormigones
+  - Cañerías (con “cantidad” calculada por repeticiones en el Excel)
+- **Gestión / trazabilidad (Calidad)**
+  - Buscar/filtrar por campos principales + satélite
+  - Subir y vincular archivo (Storage) por registro
+  - Generar QR (descargar PNG / imprimir)
+- **Obra (Calidad / Obrero)**
+  - Escanear QR desde el celular (cámara)
+  - Ver “Detalle” del registro y **descargar/ver el archivo** asociado
+
+## Roles y acceso
+
+En el estado actual del proyecto se usan **2 roles**:
+
+- **Calidad (id_rol = 2)**: acceso a gestión (`/trazabilidad`) + puede subir/vincular archivos y generar QRs.
+- **Obrero (id_rol = 3)**: acceso a escáner (`/escanner`) y detalle (`/detalle/:id`) en modo lectura/descarga.
+
+> Nota: la app restringe por rol a nivel UI/rutas. Para producción se recomienda reforzar con **RLS** (ver más abajo).
 
 ## Rutas
 
-- **Pública**
+- **Públicas**
   - `/login`
-- **Privadas (Admin, Calidad, Obrero)**
+  - `/registro`
+- **Privadas (Calidad, Obrero)**
   - `/escanner`
   - `/detalle/:id`
-- **Gestión (Admin, Calidad)**
+- **Gestión (solo Calidad)**
   - `/trazabilidad`
-  - `/carga-datos`
-  - `/generar-qr`
-- **Admin (solo Admin)**
-  - `/admin/usuarios`
+  - `/carga-datos` (compat: abre la misma pantalla de gestión)
+  - `/generar-qr` (compat: abre la misma pantalla de gestión)
+
+## Cómo funciona (flujo rápido)
+
+- **Calidad**
+  - Entrar a **Trazabilidad** (`/trazabilidad`)
+  - **Cargar datos** (Excel) → quedan disponibles en la tabla
+  - Para un registro: **vincular archivo** (PDF/imagen) → se guarda en Storage y se registra en `archivo_url`
+  - **Generar QR** → descargar PNG o imprimir (el QR abre la ficha de detalle)
+- **Obra**
+  - Abrir **Escáner** (`/escanner`) y escanear el QR
+  - Se abre **Detalle** (`/detalle/:id`) con la ficha y el botón de **Descargar / Ver archivo**
 
 ## Tecnologías
 
@@ -24,21 +56,20 @@ Sistema de trazabilidad para obras civiles/industriales: **carga masiva (Excel)*
 - QR: `qrcode.react` + `@yudiel/react-qr-scanner`
 - Excel: `xlsx`
 
-## Setup
+## Configuración (local)
 
-Instalar:
+Instalar dependencias:
 
 ```bash
 npm i
 ```
 
-Variables de entorno:
+Crear variables de entorno en un archivo `.env` (en la raíz del proyecto):
 
-- Copiá `env.example` a `.env.local`
-- Completá:
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
-  - `VITE_SUPABASE_BUCKET` (por defecto: `documentos`)
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_BUCKET` (por defecto: `documentos`)
+- `VITE_PUBLIC_APP_URL` (recomendado): URL pública del deploy que se usará para armar el link dentro del QR.
 
 Ejecutar:
 
@@ -46,76 +77,68 @@ Ejecutar:
 npm run dev
 ```
 
-## Modelo de datos (Supabase)
+### Link que se guarda en el QR
 
-Tablas sugeridas:
+El QR se genera como una URL del estilo:
 
-```sql
--- Roles
-CREATE TABLE roles (
-  id_rol SERIAL PRIMARY KEY,
-  nombre VARCHAR(50) NOT NULL
-);
+- `https://TU-DOMINIO/detalle/<uuid>?t=hormigones|canerias`
 
-INSERT INTO roles (id_rol, nombre) VALUES
-  (1, 'Admin'),
-  (2, 'Calidad'),
-  (3, 'Obrero');
+Si no seteás `VITE_PUBLIC_APP_URL`, el proyecto usa un fallback: `https://gestion-qr.vercel.app`.
 
--- Perfiles (extiende auth.users)
-CREATE TABLE perfiles (
-  id_usuario UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  id_rol INTEGER REFERENCES roles(id_rol),
-  email TEXT
-);
+## Excel: formato esperado
 
--- Hormigones
-CREATE TABLE hormigones (
-  id_hormigon UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  titulo TEXT NOT NULL,
-  nro_interno TEXT UNIQUE NOT NULL,
-  peso_total_base_kg DECIMAL,
-  satelite TEXT,
-  archivo_url TEXT,
-  qr_code_url TEXT
-);
+La carga masiva está pensada para **formatos fijos**.
 
--- Cañerías
-CREATE TABLE canerias (
-  id_caneria UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  satelite TEXT,
-  nro_linea TEXT NOT NULL,
-  nro_iso TEXT UNIQUE NOT NULL,
-  archivo_url TEXT,
-  qr_code_url TEXT
-);
-```
+### Hormigones
 
-### Notas de seguridad (RLS)
+- **Desde fila 3**
+- Columnas:
+  - **A** = `satelite`
+  - **C** = `titulo`
+  - **E** = `nro_interno` (**clave única**)
+  - **I** = `peso_total_base_kg`
 
-- La app **ya bloquea en UI** por rol (guardias de rutas), pero para producción necesitás **RLS**:
-  - Obrero: solo lectura
-  - Calidad/Admin: escritura en tablas y Storage
+### Cañerías
+
+- **Desde fila 5**
+- Columnas:
+  - **A** = `satelite`
+  - **B** = `nro_linea`
+  - **C** = `nro_iso` (clave)
+- La app calcula `cantidad` como **repeticiones** (mismo `satelite + nro_linea + nro_iso`).
+
+## Base de datos (Supabase)
+
+El script de referencia está en `database/Tables.sql`. Tablas principales:
+
+- `roles` (ids usados: 2 = Calidad, 3 = Obrero)
+- `perfiles` (extiende `auth.users` con `id_rol`)
+- `hormigones`
+- `canerias`
+
+Incluye un trigger para **crear/actualizar el perfil** al crear usuarios en `auth.users` (tomando `roleId` desde `user_metadata` cuando exista).
 
 ## Storage
 
-- Crear un bucket (ej: `documentos`)
-- La app sube archivos a:
+- Bucket: configurable con `VITE_SUPABASE_BUCKET` (default: `documentos`)
+- Se suben archivos a rutas tipo:
   - `hormigones/<id>/<timestamp>-<filename>`
   - `canerias/<id>/<timestamp>-<filename>`
-- En DB se guarda `archivo_url` como URL pública (si el bucket es público) o como `path` (si es privado).
+- En DB se guarda `archivo_url` como:
+  - **URL pública** si el bucket es público, o
+  - **path** si el bucket es privado (en ese caso la app genera **signed URL** para descargar).
 
-## Edge Function (crear usuarios)
+## Seguridad (recomendado para producción)
 
-La pantalla `/admin/usuarios` llama a una Edge Function:
+- **RLS en tablas**:
+  - Obrero: solo lectura
+  - Calidad: lectura + escritura en `hormigones/canerias`
+- **Policies en Storage**:
+  - Obrero: lectura (o signed URL)
+  - Calidad: lectura + escritura
 
-- Endpoint: `POST /functions/v1/create-user`
-- Body: `{ email, password, roleId }`
+## Deploy
 
-Implementación recomendada:
-- Usar `service_role_key` dentro de la función
-- Validar que el caller sea **Admin** (JWT + `perfiles.id_rol = 1`)
-- Crear el usuario en Auth y luego insertar en `perfiles`
+Proyecto preparado para SPA en Vercel (ver `vercel.json` con rewrite a `index.html`).
 
-> Importante: **nunca** pongas `service_role_key` en el frontend.
 
